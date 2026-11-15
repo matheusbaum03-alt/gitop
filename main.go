@@ -119,7 +119,6 @@ func doAdd(url string, buildTypes []BuildType) Repo {
 	}
 	cmd = exec.Command("bash", "-c", "git -C "+getHomePath(".local/share/gitop/"+cleanURL)+" rev-parse HEAD")
 	version, err := cmd.Output()
-	fmt.Printf("%s\n", string(version))
 	if err != nil {
 		log.Fatal("Error while getting version: " + err.Error())
 	}
@@ -185,9 +184,6 @@ func main() {
 	if len(os.Args) < 3 {
 		prettyPrintInfo()
 		os.Exit(0)
-	}
-	for _, arg := range os.Args {
-		fmt.Printf("%s\n", arg)
 	}
 	conf, err := createConf(getHomePath(".config/gitop/config.json"))
 	if err != nil {
