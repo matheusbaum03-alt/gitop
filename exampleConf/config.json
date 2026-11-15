@@ -1,0 +1,21 @@
+{
+  "$schema": "./schema.json",
+  "repos": [
+    {
+      "name": "gitop",
+      "url": "https://github.com/matheusbaum03-alt/gitop",
+      "buildTypeFile": "go.mod",
+      "version": "772353728fe52ee9401f4c298400b90f7ba433ed"
+    }
+  ],
+  "buildTypes": [
+    {
+      "fileName": "go.mod",
+      "buildCmds": {
+        "build": "go build .",
+        "install": "install -m 755 <name> ~/.local/bin/",
+        "uninstall": "rm ~/.local/bin/<name>"
+      }
+    }
+  ]
+}

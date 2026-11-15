@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Config",
+  "type": "object",
+  "properties": {
+    "repos": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Repo"
+      }
+    },
+    "buildTypes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/BuildType"
+      }
+    }
+  },
+  "required": ["repos", "buildTypes"],
+  "additionalProperties": false,
+  "$defs": {
+    "Repo": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "url": { "type": "string" },
+        "buildTypeFile": { "type": "string" },
+        "version": { "type": "string" }
+      },
+      "required": ["name", "url", "buildTypeFile", "version"],
+      "additionalProperties": false
+    },
+    "BuildType": {
+      "type": "object",
+      "properties": {
+        "fileName": { "type": "string" },
+        "buildCmds": {
+          "$ref": "#/$defs/BuildCmd"
+        }
+      },
+      "required": ["fileName", "buildCmds"],
+      "additionalProperties": false
+    },
+    "BuildCmd": {
+      "type": "object",
+      "properties": {
+        "build": { "type": "string" },
+        "install": { "type": "string" },
+        "uninstall": { "type": "string" }
+      },
+      "required": ["build", "install", "uninstall"],
+      "additionalProperties": false
+    }
+  }
+}
+
