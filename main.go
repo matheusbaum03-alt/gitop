@@ -117,16 +117,12 @@ func doAdd(url string, buildTypes []BuildType) Repo {
 			}
 		}
 	}
-	cmd = exec.Command("bash", "-c", "git -C "+getHomePath(".local/share/gitop/"+cleanURL)+" rev-parse HEAD")
-	version, err := cmd.Output()
-	if err != nil {
-		log.Fatal("Error while getting version: " + err.Error())
-	}
+	version := getVersion(cleanURL)
 	repo := Repo{
 		Name:          cleanURL,
 		URL:           url,
 		BuildTypeFile: buildFile,
-		Version:       string(version),
+		Version:       version,
 	}
 	return repo
 }
@@ -154,6 +150,15 @@ func doInstall(repo Repo, buildType BuildType) {
 	}
 }
 
+func getVersion(pathU string) string {
+	cmd := exec.Command("bash", "-c", "git -C "+getHomePath(".local/share/gitop/"+pathU)+" rev-parse HEAD")
+	version, err := cmd.Output()
+	if err != nil {
+		log.Fatal("Error while getting version: " + err.Error())
+	}
+	return string(version)
+}
+
 func doUninstall(repo Repo, buildType BuildType, repos []Repo) []Repo {
 	cmd := exec.Command("bash", "-c", buildType.BuildCmds.Uninstall)
 	cmd.Stdout = os.Stdout
@@ -178,6 +183,24 @@ func doUninstall(repo Repo, buildType BuildType, repos []Repo) []Repo {
 	}
 	repos = append(repos[:toExclude], repos[toExclude+1:]...)
 	return repos
+}
+
+func doUpdate(repo Repo, buildType BuildType) Repo {
+	cmd := exec.Command("bash", "-c", "git -C "+getHomePath(".local/share/gitop/"+repo.Name)+" pull")
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
+	err := cmd.Run()
+	if err != nil {
+		log.Fatal("git pull gave: " + err.Error())
+	}
+	if repo.Name == getVersion(getHomePath(".local/share/"+repo.Name)) {
+		fmt.Println("Nothing to do versions are the Same")
+		os.Exit(0)
+	}
+	repo.Version = getVersion(getHomePath(".local/share/gitop/" + repo.Name))
+	doBuild(repo, buildType)
+	doInstall(repo, buildType)
+	return repo
 }
 
 func main() {
@@ -238,6 +261,28 @@ func main() {
 		err = os.WriteFile(getHomePath(".config/gitop/config.json"), out, 0o644)
 		if err != nil {
 			log.Fatal("Could not write config to file: " + err.Error())
+		}
+	}
+	if task == "update" {
+		repo, Nfound := getRepo(conf.Repos)
+		if Nfound {
+			log.Fatal("Repo not Found")
+		}
+		buildType := getBuild(repo, conf.BuildTypes)
+		repoN := doUpdate(repo, buildType)
+		for i, re := range conf.Repos {
+			if re == repo {
+				conf.Repos[i] = repoN
+				break
+			}
+		}
+		out, err := json.Marshal(conf)
+		if err != nil {
+			log.Fatal("Error encoding config: " + err.Error())
+		}
+		err = os.WriteFile(getHomePath(".config/gitop/config.json"), out, 0o644)
+		if err != nil {
+			log.Fatal("Error while writting config: " + err.Error())
 		}
 	}
 }
