@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"path/filepath"
 	"slices"
 	"strings"
 )
@@ -75,13 +74,12 @@ func getBuild(repo Repo, buildTypes []BuildType) BuildType {
 }
 
 func doBuild(repo Repo, buildType BuildType) {
-	err := os.Chdir(getHomePath(".local/share/gitop/" + repo.Name))
+	err := os.Chdir(getCachePath(repo.Name))
 	if err != nil {
-		log.Fatal("Could not change to repo dir maybe it was added in bad ways?")
+		log.Fatal("Could not change to repo dir maybe it was added in a bad way? Try clonning manualy")
 	}
 	fmt.Println("Doing Build for " + buildType.FileName)
-	split := strings.Split(buildType.BuildCmds.Build, " ")
-	cmd := exec.Command(split[0], split[1:]...)
+	cmd := exec.Command("bash", "-c", buildType.BuildCmds.Build)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err = cmd.Run()
@@ -92,7 +90,7 @@ func doBuild(repo Repo, buildType BuildType) {
 
 func doAdd(url string, buildTypes []BuildType) Repo {
 	fmt.Println("Adding and cloning: " + url)
-	err := os.Chdir(getHomePath(".local/share/gitop"))
+	err := os.Chdir(getCachePath(""))
 	if err != nil {
 		log.Fatal("could not go to ~/.local/share/gitop make it if needed")
 	}
@@ -105,7 +103,7 @@ func doAdd(url string, buildTypes []BuildType) Repo {
 	}
 	cleanURL := strings.TrimSuffix(url, ".git")
 	cleanURL = path.Base(cleanURL)
-	entried, err := os.ReadDir(getHomePath(filepath.Join(".local/share/gitop/", cleanURL)))
+	entried, err := os.ReadDir(getCachePath(cleanURL))
 	if err != nil {
 		log.Fatal("Error reading repo: " + err.Error())
 	}
@@ -137,7 +135,7 @@ func getRepo(repos []Repo) (Repo, bool) {
 }
 
 func doInstall(repo Repo, buildType BuildType) {
-	err := os.Chdir(getHomePath(".local/share/gitop/" + repo.Name))
+	err := os.Chdir(getCachePath(repo.Name))
 	if err != nil {
 		log.Fatal("Could not chnage to the repo path: " + err.Error())
 	}
@@ -151,10 +149,12 @@ func doInstall(repo Repo, buildType BuildType) {
 }
 
 func getVersion(pathU string) string {
-	cmd := exec.Command("bash", "-c", "git -C "+getHomePath(".local/share/gitop/"+pathU)+" rev-parse HEAD")
+	fmt.Println(pathU)
+	cmd := exec.Command("bash", "-c", "git -C "+getCachePath(pathU)+" rev-parse HEAD")
+	cmd.Stderr = os.Stderr
 	version, err := cmd.Output()
 	if err != nil {
-		log.Fatal("Error while getting version: " + err.Error())
+		log.Fatal("Getting version returned: " + err.Error())
 	}
 	return string(version)
 }
@@ -167,7 +167,7 @@ func doUninstall(repo Repo, buildType BuildType, repos []Repo) []Repo {
 	if err != nil {
 		log.Fatal("Error while uninstaling: " + err.Error())
 	}
-	cmd = exec.Command("rm", "-rf", getHomePath(".local/share/gitop/"+repo.Name))
+	cmd = exec.Command("rm", "-rf", getCachePath(repo.Name))
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err = cmd.Run()
@@ -186,18 +186,35 @@ func doUninstall(repo Repo, buildType BuildType, repos []Repo) []Repo {
 }
 
 func doUpdate(repo Repo, buildType BuildType) Repo {
-	cmd := exec.Command("bash", "-c", "git -C "+getHomePath(".local/share/gitop/"+repo.Name)+" pull")
+	err := os.Chdir(getCachePath(repo.Name))
+	if err != nil {
+		log.Fatal("Check if repo exists maybe a failed deletion or uncloned repo look: " + err.Error())
+	}
+	fmt.Println(repo.Name)
+	oldVersion := getVersion(repo.Name)
+	cmd := exec.Command("bash", "-c", fmt.Sprintf("rm -rfv %s", getCachePath(repo.Name)))
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
-	err := cmd.Run()
+	err = cmd.Run()
 	if err != nil {
-		log.Fatal("git pull gave: " + err.Error())
+		log.Fatal("Error deleting original repo may need to reclone manualy: " + err.Error())
 	}
-	if repo.Name == getVersion(getHomePath(".local/share/"+repo.Name)) {
-		fmt.Println("Nothing to do versions are the Same")
-		os.Exit(0)
+	err = os.Chdir(getCachePath(""))
+	if err != nil {
+		log.Fatal("Could not go to cache something terrible happened " + err.Error())
 	}
-	repo.Version = getVersion(getHomePath(".local/share/gitop/" + repo.Name))
+	cmd = exec.Command("git", "clone", repo.URL)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	err = cmd.Run()
+	if err != nil {
+		log.Fatal("Error while Reclonning repo" + err.Error())
+	}
+	newVersion := getVersion(repo.Name)
+	if newVersion == oldVersion {
+		return repo
+	}
+	repo.Version = newVersion
 	doBuild(repo, buildType)
 	doInstall(repo, buildType)
 	return repo
@@ -208,7 +225,7 @@ func main() {
 		prettyPrintInfo()
 		os.Exit(0)
 	}
-	conf, err := createConf(getHomePath(".config/gitop/config.json"))
+	conf, err := createConf(getConfigPath())
 	if err != nil {
 		log.Fatalf("Error while making ctx %s\n", err.Error())
 	}
@@ -234,7 +251,7 @@ func main() {
 		if err != nil {
 			log.Fatal("Could Not encode config: " + err.Error())
 		}
-		err = os.WriteFile(getHomePath(".config/gitop/config.json"), out, 0o644)
+		err = os.WriteFile(getConfigPath(), out, 0o644)
 		if err != nil {
 			log.Fatal("Could Not write encoded config: " + err.Error())
 		}
@@ -258,7 +275,7 @@ func main() {
 		if err != nil {
 			log.Fatal("Error encoding config: " + err.Error())
 		}
-		err = os.WriteFile(getHomePath(".config/gitop/config.json"), out, 0o644)
+		err = os.WriteFile(getConfigPath(), out, 0o644)
 		if err != nil {
 			log.Fatal("Could not write config to file: " + err.Error())
 		}
@@ -280,7 +297,7 @@ func main() {
 		if err != nil {
 			log.Fatal("Error encoding config: " + err.Error())
 		}
-		err = os.WriteFile(getHomePath(".config/gitop/config.json"), out, 0o644)
+		err = os.WriteFile(getConfigPath(), out, 0o644)
 		if err != nil {
 			log.Fatal("Error while writting config: " + err.Error())
 		}
