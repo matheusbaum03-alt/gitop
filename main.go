@@ -212,6 +212,7 @@ func doUpdate(repo Repo, buildType BuildType) Repo {
 	}
 	newVersion := getVersion(repo.Name)
 	if newVersion == oldVersion {
+		fmt.Println("nothing to do alredy updated")
 		return repo
 	}
 	repo.Version = newVersion
