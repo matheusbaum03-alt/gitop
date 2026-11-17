@@ -194,7 +194,6 @@ func doUpdate(repo Repo, buildType BuildType) Repo {
 	oldVersion := getVersion(repo.Name)
 	cmd := exec.Command("bash", "-c", fmt.Sprintf("rm -rfv %s", getCachePath(repo.Name)))
 	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
 	err = cmd.Run()
 	if err != nil {
 		log.Fatal("Error deleting original repo may need to reclone manualy: " + err.Error())
