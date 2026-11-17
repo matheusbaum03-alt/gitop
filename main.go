@@ -36,7 +36,7 @@ type config struct {
 }
 
 func validateArgs() string {
-	if !slices.Contains([]string{"build", "install", "uninstall", "update", "add"}, os.Args[1]) {
+	if !slices.Contains([]string{"build", "install", "uninstall", "update", "add", "updateAll"}, os.Args[1]) {
 		fmt.Printf("invalid option: you put %s\n can be: build, install, uninstall, update or add\n", os.Args[1])
 		os.Exit(1)
 	}
@@ -220,17 +220,30 @@ func doUpdate(repo Repo, buildType BuildType) Repo {
 	return repo
 }
 
-func main() {
-	if len(os.Args) < 3 {
-		prettyPrintInfo()
-		os.Exit(0)
+func doUpdateAll(conf config) config {
+	for i, repo := range conf.Repos {
+		build := getBuild(repo, conf.BuildTypes)
+		repoN := doUpdate(repo, build)
+		conf.Repos[i] = repoN
 	}
+	return conf
+}
+
+func main() {
+	if len(os.Args) <= 2 {
+		if len(os.Args) == 1 {
+			prettyPrintInfo()
+			os.Exit(0)
+		} else if os.Args[1] != "updateAll" {
+			prettyPrintInfo()
+			os.Exit(0)
+		}
+	}
+	task := validateArgs()
 	conf, err := createConf(getConfigPath())
 	if err != nil {
 		log.Fatalf("Error while making ctx %s\n", err.Error())
 	}
-	task := validateArgs()
-
 	if task == "build" {
 		repo, Nfound := getRepo(conf.Repos)
 		if Nfound {
@@ -293,6 +306,17 @@ func main() {
 				break
 			}
 		}
+		out, err := json.Marshal(conf)
+		if err != nil {
+			log.Fatal("Error encoding config: " + err.Error())
+		}
+		err = os.WriteFile(getConfigPath(), out, 0o644)
+		if err != nil {
+			log.Fatal("Error while writting config: " + err.Error())
+		}
+	}
+	if task == "updateAll" {
+		conf = doUpdateAll(conf)
 		out, err := json.Marshal(conf)
 		if err != nil {
 			log.Fatal("Error encoding config: " + err.Error())
