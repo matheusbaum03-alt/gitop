@@ -121,7 +121,7 @@ func getRepoNParse(repos []Repo) (Repo, []Repo, bool) {
 	for i, repo := range repos {
 		if repo.Name == os.Args[2] {
 			parseCmds(&repo.BuildType.BuildCmds, repo.Name)
-			parseCmds(&repos[i].BuildType.BuildCmds, repos[i].Name)
+			parseCmds(&repos[i].BuildType.BuildCmds, repo.Name)
 			return repo, repos, false
 		}
 	}
