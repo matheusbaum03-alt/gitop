@@ -220,6 +220,8 @@ func doUpdate(repo Repo) Repo {
 
 func doUpdateAll(conf config) config {
 	for i, repo := range conf.Repos {
+		parseCmds(&repo.BuildType.BuildCmds, repo.Name)
+		fmt.Println(repo.BuildType.BuildCmds.Install)
 		repoN := doUpdate(repo)
 		conf.Repos[i] = repoN
 	}
