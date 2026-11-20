@@ -99,7 +99,7 @@ func doAdd(url string, buildTypes []BuildType) Repo {
 	var buildType BuildType
 	for _, entry := range entried {
 		for _, buildTypeL := range buildTypes {
-			if entry.Name() == buildType.FileName && !entry.IsDir() {
+			if entry.Name() == buildTypeL.FileName && !entry.IsDir() {
 				buildType = buildTypeL
 			}
 		}
