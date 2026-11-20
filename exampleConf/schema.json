@@ -1,56 +1,83 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Config",
+  "title": "Package manager config",
+  "description": "Configuration listing installed repos and the build types used to build them.",
   "type": "object",
   "properties": {
     "repos": {
+      "description": "Repositories that have been added.",
       "type": "array",
-      "items": {
-        "$ref": "#/$defs/Repo"
-      }
+      "items": { "$ref": "#/$defs/repo" }
     },
     "buildTypes": {
+      "description": "Known build types, matched by the presence of a file in the repo.",
       "type": "array",
-      "items": {
-        "$ref": "#/$defs/BuildType"
-      }
+      "items": { "$ref": "#/$defs/buildType" }
     }
   },
   "required": ["repos", "buildTypes"],
   "additionalProperties": false,
   "$defs": {
-    "Repo": {
+    "repo": {
       "type": "object",
       "properties": {
-        "name": { "type": "string" },
-        "url": { "type": "string" },
-        "buildTypeFile": { "type": "string" },
-        "version": { "type": "string" }
+        "name": {
+          "description": "Short name of the repo; also the binary name used in install/uninstall.",
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "description": "Git clone URL.",
+          "type": "string",
+          "format": "uri"
+        },
+        "buildType": {
+          "description": "The build type selected for this repo, with <name> already substituted.",
+          "$ref": "#/$defs/buildType"
+        },
+        "version": {
+          "description": "Installed git commit SHA (may include a trailing newline).",
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}\\s*$"
+        }
       },
-      "required": ["name", "url", "buildTypeFile", "version"],
+      "required": ["name", "url", "buildType", "version"],
       "additionalProperties": false
     },
-    "BuildType": {
+    "buildType": {
       "type": "object",
       "properties": {
-        "fileName": { "type": "string" },
-        "buildCmds": {
-          "$ref": "#/$defs/BuildCmd"
-        }
+        "fileName": {
+          "description": "File whose presence in the repo identifies this build type (e.g. go.mod, Makefile).",
+          "type": "string",
+          "minLength": 1
+        },
+        "buildCmds": { "$ref": "#/$defs/buildCmds" }
       },
       "required": ["fileName", "buildCmds"],
       "additionalProperties": false
     },
-    "BuildCmd": {
+    "buildCmds": {
       "type": "object",
       "properties": {
-        "build": { "type": "string" },
-        "install": { "type": "string" },
-        "uninstall": { "type": "string" }
+        "build": {
+          "description": "Shell command that builds the project.",
+          "type": "string",
+          "minLength": 1
+        },
+        "install": {
+          "description": "Shell command that installs the built binary. <name> is a placeholder for the repo name in buildTypes templates.",
+          "type": "string",
+          "minLength": 1
+        },
+        "uninstall": {
+          "description": "Shell command that removes the installed binary. <name> is a placeholder for the repo name in buildTypes templates.",
+          "type": "string",
+          "minLength": 1
+        }
       },
       "required": ["build", "install", "uninstall"],
       "additionalProperties": false
     }
   }
 }
-
