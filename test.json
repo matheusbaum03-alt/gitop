@@ -1,8 +1,0 @@
-{
-  "fileName": "go.mod",
-  "buildCmds": {
-    "build": "go build .",
-    "install": "install -m 755 <name> ~/.local/bin",
-    "uninstall": "rm ~/.local/bin/<name> && echo works"
-  }
-}
