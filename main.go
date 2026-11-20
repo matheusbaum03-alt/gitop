@@ -12,9 +12,9 @@ import (
 )
 
 type Repo struct {
-	Name          string `json:"name"`
-	URL           string `json:"url"`
-	BuildTypeFile string `json:"buildTypeFile"`
+	Name      string    `json:"name"`
+	URL       string    `json:"url"`
+	BuildType BuildType `json:"buildType"`
 	// The sha256 of the commit
 	Version string `json:"version"`
 }
@@ -26,8 +26,8 @@ type BuildCmd struct {
 }
 
 type BuildType struct {
-	FileName  string `json:"fileName"`
-	BuildCmds BuildCmd
+	FileName  string   `json:"fileName"`
+	BuildCmds BuildCmd `json:"buildCmds"`
 }
 
 type config struct {
@@ -36,8 +36,8 @@ type config struct {
 }
 
 func validateArgs() string {
-	if !slices.Contains([]string{"build", "install", "uninstall", "update", "add", "updateAll"}, os.Args[1]) {
-		fmt.Printf("invalid option: you put %s\n can be: build, install, uninstall, update or add\n", os.Args[1])
+	if !slices.Contains([]string{"build", "install", "uninstall", "update", "add", "updateAll", "chBuild"}, os.Args[1]) {
+		fmt.Printf("invalid option: you put %s\n can be: build, install, uninstall, update, updateAll, chBuild or add\n", os.Args[1])
 		os.Exit(1)
 	}
 	return os.Args[1]
@@ -62,24 +62,13 @@ func createConf(configPath string) (config, error) {
 	return conf, nil
 }
 
-func getBuild(repo Repo, buildTypes []BuildType) BuildType {
-	var res BuildType
-	for _, buildType := range buildTypes {
-		if buildType.FileName == repo.BuildTypeFile {
-			parseCmds(&buildType.BuildCmds, repo.Name)
-			res = buildType
-		}
-	}
-	return res
-}
-
-func doBuild(repo Repo, buildType BuildType) {
+func doBuild(repo Repo) {
 	err := os.Chdir(getCachePath(repo.Name))
 	if err != nil {
 		log.Fatal("Could not change to repo dir maybe it was added in a bad way? Try clonning manualy")
 	}
-	fmt.Println("Doing Build for " + buildType.FileName)
-	cmd := exec.Command("bash", "-c", buildType.BuildCmds.Build)
+	fmt.Println("Doing Build for " + repo.BuildType.FileName)
+	cmd := exec.Command("bash", "-c", repo.BuildType.BuildCmds.Build)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err = cmd.Run()
@@ -107,39 +96,41 @@ func doAdd(url string, buildTypes []BuildType) Repo {
 	if err != nil {
 		log.Fatal("Error reading repo: " + err.Error())
 	}
-	var buildFile string
+	var buildType BuildType
 	for _, entry := range entried {
-		for _, buildType := range buildTypes {
+		for _, buildTypeL := range buildTypes {
 			if entry.Name() == buildType.FileName && !entry.IsDir() {
-				buildFile = entry.Name()
+				buildType = buildTypeL
 			}
 		}
 	}
 	version := getVersion(cleanURL)
 	repo := Repo{
-		Name:          cleanURL,
-		URL:           url,
-		BuildTypeFile: buildFile,
-		Version:       version,
+		Name:      cleanURL,
+		URL:       url,
+		BuildType: buildType,
+		Version:   version,
 	}
 	return repo
 }
 
-func getRepo(repos []Repo) (Repo, bool) {
-	for _, repo := range repos {
+func getRepoNParse(repos []Repo) (Repo, []Repo, bool) {
+	for i, repo := range repos {
 		if repo.Name == os.Args[2] {
-			return repo, false
+			parseCmds(&repo.BuildType.BuildCmds, repo.Name)
+			parseCmds(&repos[i].BuildType.BuildCmds, repos[i].Name)
+			return repo, repos, false
 		}
 	}
-	return Repo{}, true
+	return Repo{}, []Repo{{}}, true
 }
 
-func doInstall(repo Repo, buildType BuildType) {
+func doInstall(repo Repo) {
 	err := os.Chdir(getCachePath(repo.Name))
 	if err != nil {
-		log.Fatal("Could not chnage to the repo path: " + err.Error())
+		log.Fatal("Could not go to the repo path: " + err.Error())
 	}
-	cmd := exec.Command("bash", "-c", buildType.BuildCmds.Install)
+	cmd := exec.Command("bash", "-c", repo.BuildType.BuildCmds.Install)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err = cmd.Run()
@@ -159,8 +150,8 @@ func getVersion(pathU string) string {
 	return string(version)
 }
 
-func doUninstall(repo Repo, buildType BuildType, repos []Repo) []Repo {
-	cmd := exec.Command("bash", "-c", buildType.BuildCmds.Uninstall)
+func doUninstall(repo Repo, repos []Repo) []Repo {
+	cmd := exec.Command("bash", "-c", repo.BuildType.BuildCmds.Uninstall)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err := cmd.Run()
@@ -177,15 +168,19 @@ func doUninstall(repo Repo, buildType BuildType, repos []Repo) []Repo {
 	toExclude := -1
 	for i, re := range repos {
 		if repo == re {
+			fmt.Printf("Found at %d\n", i)
 			toExclude = i
 			break
 		}
+	}
+	if toExclude == -1 {
+		log.Fatal("Could not find repo in repos that were given how did this happen I have no idea")
 	}
 	repos = append(repos[:toExclude], repos[toExclude+1:]...)
 	return repos
 }
 
-func doUpdate(repo Repo, buildType BuildType) Repo {
+func doUpdate(repo Repo) Repo {
 	err := os.Chdir(getCachePath(repo.Name))
 	if err != nil {
 		log.Fatal("Check if repo exists maybe a failed deletion or uncloned repo look: " + err.Error())
@@ -215,18 +210,30 @@ func doUpdate(repo Repo, buildType BuildType) Repo {
 		return repo
 	}
 	repo.Version = newVersion
-	doBuild(repo, buildType)
-	doInstall(repo, buildType)
+	doBuild(repo)
+	doInstall(repo)
 	return repo
 }
 
 func doUpdateAll(conf config) config {
 	for i, repo := range conf.Repos {
-		build := getBuild(repo, conf.BuildTypes)
-		repoN := doUpdate(repo, build)
+		repoN := doUpdate(repo)
 		conf.Repos[i] = repoN
 	}
 	return conf
+}
+
+func chBuild(repo Repo, newBuild BuildType, repos []Repo) []Repo {
+	var toChange int
+	for i, re := range repos {
+		if re == repo {
+			toChange = i
+			break
+		}
+	}
+	repo.BuildType = newBuild
+	repos[toChange] = repo
+	return repos
 }
 
 func main() {
@@ -245,12 +252,12 @@ func main() {
 		log.Fatalf("Error while making ctx %s\n", err.Error())
 	}
 	if task == "build" {
-		repo, Nfound := getRepo(conf.Repos)
+		repo, temp, Nfound := getRepoNParse(conf.Repos)
+		conf.Repos = temp
 		if Nfound {
 			log.Fatal("Could not find repo")
 		}
-		buildType := getBuild(repo, conf.BuildTypes)
-		doBuild(repo, buildType)
+		doBuild(repo)
 	}
 	if task == "add" {
 		repo := doAdd(os.Args[2], conf.BuildTypes)
@@ -270,20 +277,20 @@ func main() {
 		}
 	}
 	if task == "install" {
-		repo, Nfound := getRepo(conf.Repos)
+		repo, temp, Nfound := getRepoNParse(conf.Repos)
+		conf.Repos = temp
 		if Nfound {
 			log.Fatal("Could not find repo")
 		}
-		buildType := getBuild(repo, conf.BuildTypes)
-		doInstall(repo, buildType)
+		doInstall(repo)
 	}
 	if task == "uninstall" {
-		repo, Nfound := getRepo(conf.Repos)
+		repo, temp, Nfound := getRepoNParse(conf.Repos)
+		conf.Repos = temp
 		if Nfound {
 			log.Fatal("Could not find repo")
 		}
-		buildType := getBuild(repo, conf.BuildTypes)
-		conf.Repos = doUninstall(repo, buildType, conf.Repos)
+		conf.Repos = doUninstall(repo, conf.Repos)
 		out, err := json.Marshal(conf)
 		if err != nil {
 			log.Fatal("Error encoding config: " + err.Error())
@@ -294,12 +301,12 @@ func main() {
 		}
 	}
 	if task == "update" {
-		repo, Nfound := getRepo(conf.Repos)
+		repo, temp, Nfound := getRepoNParse(conf.Repos)
+		conf.Repos = temp
 		if Nfound {
 			log.Fatal("Repo not Found")
 		}
-		buildType := getBuild(repo, conf.BuildTypes)
-		repoN := doUpdate(repo, buildType)
+		repoN := doUpdate(repo)
 		for i, re := range conf.Repos {
 			if re == repo {
 				conf.Repos[i] = repoN
@@ -318,6 +325,34 @@ func main() {
 	if task == "updateAll" {
 		conf = doUpdateAll(conf)
 		out, err := json.Marshal(conf)
+		if err != nil {
+			log.Fatal("Error encoding config: " + err.Error())
+		}
+		err = os.WriteFile(getConfigPath(), out, 0o644)
+		if err != nil {
+			log.Fatal("Error while writting config: " + err.Error())
+		}
+	}
+	if task == "chBuild" {
+		if len(os.Args) != 4 {
+			log.Fatal("To chBuild use: gitop chBuild <repo> <path to a json that is a buildType>")
+		}
+		out, err := os.ReadFile(os.Args[3])
+		if err != nil {
+			log.Fatal("Error opening new buildType: " + err.Error())
+		}
+		var build BuildType
+		err = json.Unmarshal(out, &build)
+		if err != nil {
+			log.Fatal("Error while decoding build type: " + err.Error())
+		}
+		repo, temp, Nfound := getRepoNParse(conf.Repos)
+		conf.Repos = temp
+		if Nfound {
+			log.Fatal("Repo not found")
+		}
+		conf.Repos = chBuild(repo, build, conf.Repos)
+		out, err = json.Marshal(conf)
 		if err != nil {
 			log.Fatal("Error encoding config: " + err.Error())
 		}
