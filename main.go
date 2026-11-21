@@ -83,7 +83,7 @@ func doAdd(url string, buildTypes []BuildType) Repo {
 	if err != nil {
 		log.Fatal("could not go to ~/.local/share/gitop make it if needed")
 	}
-	cmd := exec.Command("git", "clone", url)
+	cmd := exec.Command("git", "clone", "--depth", "1", url)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err = cmd.Run()
@@ -200,7 +200,7 @@ func doUpdate(repo Repo) Repo {
 	if err != nil {
 		log.Fatal("Could not go to cache something terrible happened " + err.Error())
 	}
-	cmd = exec.Command("git", "clone", repo.URL)
+	cmd = exec.Command("git", "clone", "--depth", "1", repo.URL)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err = cmd.Run()
