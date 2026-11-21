@@ -36,8 +36,8 @@ type config struct {
 }
 
 func validateArgs() string {
-	if !slices.Contains([]string{"build", "install", "uninstall", "update", "add", "updateAll", "chBuild"}, os.Args[1]) {
-		fmt.Printf("invalid option: you put %s\n can be: build, install, uninstall, update, updateAll, chBuild or add\n", os.Args[1])
+	if !slices.Contains([]string{"build", "install", "uninstall", "update", "add", "updateAll", "chBuild", "buildInstall"}, os.Args[1]) {
+		fmt.Printf("invalid option: you put %s\n can be: build, install, uninstall, update, updateAll, chBuild, buildInstall or add\n", os.Args[1])
 		os.Exit(1)
 	}
 	return os.Args[1]
@@ -364,5 +364,14 @@ func main() {
 		if err != nil {
 			log.Fatal("Error while writting config: " + err.Error())
 		}
+	}
+	if task == "buildInstall" {
+		repo, temp, Nfound := getRepoNParse(conf.Repos)
+		if Nfound {
+			log.Fatal("Could not find repo")
+		}
+		conf.Repos = temp
+		doBuild(repo)
+		doInstall(repo)
 	}
 }
