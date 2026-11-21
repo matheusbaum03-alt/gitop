@@ -188,6 +188,7 @@ func doUpdate(repo Repo) Repo {
 	}
 	fmt.Println("Updating: " + repo.Name)
 	oldVersion := getVersion(repo.Name)
+	fmt.Println("old: " + oldVersion)
 	cmd := exec.Command("bash", "-c", "git fetch && git reset --hard && git clean -fd")
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
@@ -196,6 +197,7 @@ func doUpdate(repo Repo) Repo {
 		log.Fatal("Error while updating repo: " + err.Error())
 	}
 	newVersion := getVersion(repo.Name)
+	fmt.Println("new: " + newVersion)
 	if newVersion == oldVersion {
 		fmt.Println("nothing to do alredy updated")
 		return repo
@@ -229,6 +231,7 @@ func chBuild(repo Repo, newBuild BuildType, repos []Repo) []Repo {
 }
 
 func main() {
+	fmt.Println("testing")
 	if len(os.Args) <= 2 {
 		if len(os.Args) == 1 {
 			prettyPrintInfo()
