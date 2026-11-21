@@ -184,7 +184,7 @@ func doUninstall(repo Repo, repos []Repo) []Repo {
 func doUpdate(repo Repo) Repo {
 	err := os.Chdir(getCachePath(repo.Name))
 	if err != nil {
-		log.Fatal("Check if repo exists maybe a failed deletion or uncloned repo look: " + err.Error())
+		log.Fatal("Check if repo exists maybe a uncloned repo look: " + err.Error())
 	}
 	fmt.Println("Updating: " + repo.Name)
 	oldVersion := getVersion(repo.Name)
