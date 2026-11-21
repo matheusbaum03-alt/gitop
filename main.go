@@ -67,7 +67,7 @@ func doBuild(repo Repo) {
 	if err != nil {
 		log.Fatal("Could not change to repo dir maybe it was added in a bad way? Try clonning manualy")
 	}
-	fmt.Println("Doing Build for " + repo.BuildType.FileName)
+	fmt.Printf("Doing Build for %s using a %s\n", repo.Name, repo.BuildType.FileName)
 	cmd := exec.Command("bash", "-c", repo.BuildType.BuildCmds.Build)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -143,7 +143,6 @@ func doInstall(repo Repo) {
 }
 
 func getVersion(pathU string) string {
-	fmt.Println(pathU)
 	cmd := exec.Command("bash", "-c", "git -C "+getCachePath(pathU)+" rev-parse HEAD")
 	cmd.Stderr = os.Stderr
 	version, err := cmd.Output()
@@ -171,7 +170,6 @@ func doUninstall(repo Repo, repos []Repo) []Repo {
 	toExclude := -1
 	for i, re := range repos {
 		if repo == re {
-			fmt.Printf("Found at %d\n", i)
 			toExclude = i
 			break
 		}
@@ -188,7 +186,7 @@ func doUpdate(repo Repo) Repo {
 	if err != nil {
 		log.Fatal("Check if repo exists maybe a failed deletion or uncloned repo look: " + err.Error())
 	}
-	fmt.Println(repo.Name)
+	fmt.Println("Updating: " + repo.Name)
 	oldVersion := getVersion(repo.Name)
 	cmd := exec.Command("bash", "-c", fmt.Sprintf("rm -rfv %s", getCachePath(repo.Name)))
 	cmd.Stderr = os.Stderr
