@@ -188,22 +188,12 @@ func doUpdate(repo Repo) Repo {
 	}
 	fmt.Println("Updating: " + repo.Name)
 	oldVersion := getVersion(repo.Name)
-	cmd := exec.Command("bash", "-c", fmt.Sprintf("rm -rfv %s", getCachePath(repo.Name)))
+	cmd := exec.Command("bash", "-c", "git fetch && git reset --hard && git clean -fd")
 	cmd.Stderr = os.Stderr
-	err = cmd.Run()
-	if err != nil {
-		log.Fatal("Error deleting original repo may need to reclone manualy: " + err.Error())
-	}
-	err = os.Chdir(getCachePath(""))
-	if err != nil {
-		log.Fatal("Could not go to cache something terrible happened " + err.Error())
-	}
-	cmd = exec.Command("git", "clone", "--depth", "1", repo.URL)
 	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
 	err = cmd.Run()
 	if err != nil {
-		log.Fatal("Error while Reclonning repo" + err.Error())
+		log.Fatal("Error while updating repo: " + err.Error())
 	}
 	newVersion := getVersion(repo.Name)
 	if newVersion == oldVersion {
