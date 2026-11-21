@@ -8,3 +8,4 @@ To use this you need one thing go and that's it
 It is good to clone to base config.json I'm not sure of what happens if not
 
 DISCLAIMER: Anything installed in your system using this program is your fault not mine
+If you have any idea on something to add try reaching me
