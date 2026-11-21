@@ -105,7 +105,7 @@ func doAdd(url string, buildTypes []BuildType) Repo {
 		}
 	}
 	if buildType.FileName == "" {
-		fmt.Println("No matching build type found returning empty to add use: gitop chBuild " + cleanURL + " <path to a buildType in json>")
+		fmt.Println("No matching build type found returning empty to add use: gitop chBuild " + cleanURL + " <path to a buildType in json> to insert a custom one bash scripts work")
 	}
 	version := getVersion(cleanURL)
 	repo := Repo{
