@@ -1,6 +1,6 @@
 # gitop
 
-![logo](./docs/logo.png)
+![logo](./assets/logo.png)
 
 The "package manager" of my dreams it kind of is not a package manager. Though this project can do some for you it clones and installs any github or simply git repo you can think of if you configure ~/.config/gitop/config.json correctly
 I had this idea because I have problems with the luaJIT that is used in pkgit so I decided why not do it myself
