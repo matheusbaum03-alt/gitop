@@ -1,11 +1,17 @@
 {
-  "$schema": "./schema.json",
   "repos": [
     {
       "name": "gitop",
       "url": "https://github.com/matheusbaum03-alt/gitop",
-      "buildTypeFile": "go.mod",
-      "version": "772353728fe52ee9401f4c298400b90f7ba433ed"
+      "buildType": {
+        "fileName": "go.mod",
+        "buildCmds": {
+          "build": "go build .",
+          "install": "install -m 755 gitop ~/.local/bin/",
+          "uninstall": "rm ~/.local/bin/gitop"
+        }
+      },
+      "version": "b078acb6f9d517770c65103a0ec54235a9df778a\n"
     }
   ],
   "buildTypes": [
@@ -13,8 +19,16 @@
       "fileName": "go.mod",
       "buildCmds": {
         "build": "go build .",
-        "install": "install -m 755 <name> ~/.local/bin/",
-        "uninstall": "rm ~/.local/bin/<name>"
+        "install": "install -m 755 \u003cname\u003e ~/.local/bin/",
+        "uninstall": "rm ~/.local/bin/\u003cname\u003e"
+      }
+    },
+    {
+      "fileName": "Makefile",
+      "buildCmds": {
+        "build": "make -j4",
+        "install": "install -m 755 \u003cname\u003e ~/.local/bin/",
+        "uninstall": "rm ~/.local/bin/\u003cname\u003e"
       }
     }
   ]
