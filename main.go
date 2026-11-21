@@ -65,7 +65,7 @@ func createConf(configPath string) (config, error) {
 func doBuild(repo Repo) {
 	err := os.Chdir(getCachePath(repo.Name))
 	if err != nil {
-		log.Fatal("Could not change to repo dir maybe it was added in a bad way? Try clonning manualy")
+		logF("Could not change to repo dir maybe it was added in a bad way? Try clonning manualy")
 	}
 	fmt.Printf("Doing Build for %s using a %s\n", repo.Name, repo.BuildType.FileName)
 	cmd := exec.Command("bash", "-c", repo.BuildType.BuildCmds.Build)
@@ -73,7 +73,7 @@ func doBuild(repo Repo) {
 	cmd.Stderr = os.Stderr
 	err = cmd.Run()
 	if err != nil {
-		log.Fatal("Error on build: " + err.Error())
+		logF("Error on build: " + err.Error())
 	}
 }
 
@@ -81,20 +81,20 @@ func doAdd(url string, buildTypes []BuildType) Repo {
 	fmt.Println("Adding and cloning: " + url)
 	err := os.Chdir(getCachePath(""))
 	if err != nil {
-		log.Fatal("could not go to ~/.local/share/gitop make it if needed")
+		logF("could not go to ~/.local/share/gitop make it if needed")
 	}
 	cmd := exec.Command("git", "clone", "--depth", "1", url)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err = cmd.Run()
 	if err != nil {
-		log.Fatal("error while cloning: " + err.Error())
+		logF("error while cloning: " + err.Error())
 	}
 	cleanURL := strings.TrimSuffix(url, ".git")
 	cleanURL = path.Base(cleanURL)
 	entried, err := os.ReadDir(getCachePath(cleanURL))
 	if err != nil {
-		log.Fatal("Error reading repo: " + err.Error())
+		logF("Error reading repo: " + err.Error())
 	}
 	var buildType BuildType
 	for _, entry := range entried {
@@ -131,14 +131,14 @@ func getRepoNParse(repos []Repo) (Repo, []Repo, bool) {
 func doInstall(repo Repo) {
 	err := os.Chdir(getCachePath(repo.Name))
 	if err != nil {
-		log.Fatal("Could not go to the repo path: " + err.Error())
+		logF("Could not go to the repo path: " + err.Error())
 	}
 	cmd := exec.Command("bash", "-c", repo.BuildType.BuildCmds.Install)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err = cmd.Run()
 	if err != nil {
-		log.Fatal("Error while instaling: " + err.Error())
+		logF("Error while instaling: " + err.Error())
 	}
 }
 
@@ -147,25 +147,34 @@ func getVersion(pathU string) string {
 	cmd.Stderr = os.Stderr
 	version, err := cmd.Output()
 	if err != nil {
-		log.Fatal("Getting version returned: " + err.Error())
+		logF("Getting version returned: " + err.Error())
 	}
 	return string(version)
 }
 
 func doUninstall(repo Repo, repos []Repo) []Repo {
+	err := os.Chdir(getCachePath(repo.Name))
+	if err != nil {
+		logF("error going to repo")
+	}
 	cmd := exec.Command("bash", "-c", repo.BuildType.BuildCmds.Uninstall)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	err := cmd.Run()
+	err = cmd.Run()
 	if err != nil {
-		log.Fatal("Error while uninstaling: " + err.Error())
+		logF("error while uninstaling: " + err.Error())
+	}
+
+	err = os.Chdir("..")
+	if err != nil {
+		logF("Error leaving repo")
 	}
 	cmd = exec.Command("rm", "-rf", getCachePath(repo.Name))
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err = cmd.Run()
 	if err != nil {
-		log.Fatal("Error Deleting repo please do it yourself")
+		logF("Error Deleting repo please do it yourself")
 	}
 	toExclude := -1
 	for i, re := range repos {
@@ -175,7 +184,7 @@ func doUninstall(repo Repo, repos []Repo) []Repo {
 		}
 	}
 	if toExclude == -1 {
-		log.Fatal("Could not find repo in repos that were given how did this happen I have no idea")
+		logF("Could not find repo in repos that were given how did this happen I have no idea")
 	}
 	repos = append(repos[:toExclude], repos[toExclude+1:]...)
 	return repos
@@ -184,7 +193,7 @@ func doUninstall(repo Repo, repos []Repo) []Repo {
 func doUpdate(repo Repo) Repo {
 	err := os.Chdir(getCachePath(repo.Name))
 	if err != nil {
-		log.Fatal("Check if repo exists maybe a uncloned repo look: " + err.Error())
+		logF("Check if repo exists maybe a uncloned repo look: " + err.Error())
 	}
 	fmt.Println("Updating: " + repo.Name)
 	oldVersion := getVersion(repo.Name)
@@ -194,7 +203,7 @@ func doUpdate(repo Repo) Repo {
 	cmd.Stdout = os.Stdout
 	err = cmd.Run()
 	if err != nil {
-		log.Fatal("Error while updating repo: " + err.Error())
+		logF("Error while updating repo: " + err.Error())
 	}
 	newVersion := getVersion(repo.Name)
 	fmt.Println("new: " + newVersion)
@@ -230,7 +239,25 @@ func chBuild(repo Repo, newBuild BuildType, repos []Repo) []Repo {
 	return repos
 }
 
+func logF(msg string) {
+	fmt.Println(msg)
+	err := os.Remove(getCachePath("lock.lock"))
+	if err != nil {
+		log.Fatal("Error removing check if is there")
+	}
+	os.Exit(1)
+}
+
 func main() {
+	t, err := os.Create(getCachePath("lock.lock"))
+	if err != nil {
+		logF("Could not create lock: " + err.Error())
+	}
+	err = t.Close()
+	if err != nil {
+		fmt.Println("Error closing lock ignorable: " + err.Error())
+	}
+
 	if len(os.Args) <= 2 {
 		if len(os.Args) == 1 {
 			prettyPrintInfo()
@@ -243,13 +270,13 @@ func main() {
 	task := validateArgs()
 	conf, err := createConf(getConfigPath())
 	if err != nil {
-		log.Fatalf("Error while making ctx %s\n", err.Error())
+		logF("Error while making ctx: " + err.Error())
 	}
 	if task == "build" {
 		repo, temp, Nfound := getRepoNParse(conf.Repos)
 		conf.Repos = temp
 		if Nfound {
-			log.Fatal("Could not find repo")
+			logF("Could not find repo")
 		}
 		doBuild(repo)
 	}
@@ -257,24 +284,24 @@ func main() {
 		repo := doAdd(os.Args[2], conf.BuildTypes)
 		for _, re := range conf.Repos {
 			if re == repo {
-				log.Fatal("Repo was already added")
+				logF("Repo was already added")
 			}
 		}
 		conf.Repos = append(conf.Repos, repo)
 		out, err := json.Marshal(conf)
 		if err != nil {
-			log.Fatal("Could Not encode config: " + err.Error())
+			logF("Could Not encode config: " + err.Error())
 		}
 		err = os.WriteFile(getConfigPath(), out, 0o644)
 		if err != nil {
-			log.Fatal("Could Not write encoded config: " + err.Error())
+			logF("Could Not write encoded config: " + err.Error())
 		}
 	}
 	if task == "install" {
 		repo, temp, Nfound := getRepoNParse(conf.Repos)
 		conf.Repos = temp
 		if Nfound {
-			log.Fatal("Could not find repo")
+			logF("Could not find repo")
 		}
 		doInstall(repo)
 	}
@@ -282,23 +309,23 @@ func main() {
 		repo, temp, Nfound := getRepoNParse(conf.Repos)
 		conf.Repos = temp
 		if Nfound {
-			log.Fatal("Could not find repo")
+			logF("Could not find repo")
 		}
 		conf.Repos = doUninstall(repo, conf.Repos)
 		out, err := json.Marshal(conf)
 		if err != nil {
-			log.Fatal("Error encoding config: " + err.Error())
+			logF("Error encoding config: " + err.Error())
 		}
 		err = os.WriteFile(getConfigPath(), out, 0o644)
 		if err != nil {
-			log.Fatal("Could not write config to file: " + err.Error())
+			logF("Could not write config to file: " + err.Error())
 		}
 	}
 	if task == "update" {
 		repo, temp, Nfound := getRepoNParse(conf.Repos)
 		conf.Repos = temp
 		if Nfound {
-			log.Fatal("Repo not Found")
+			logF("Repo not Found")
 		}
 		repoN := doUpdate(repo)
 		for i, re := range conf.Repos {
@@ -309,56 +336,56 @@ func main() {
 		}
 		out, err := json.Marshal(conf)
 		if err != nil {
-			log.Fatal("Error encoding config: " + err.Error())
+			logF("Error encoding config: " + err.Error())
 		}
 		err = os.WriteFile(getConfigPath(), out, 0o644)
 		if err != nil {
-			log.Fatal("Error while writting config: " + err.Error())
+			logF("Error while writting config: " + err.Error())
 		}
 	}
 	if task == "updateAll" {
 		conf = doUpdateAll(conf)
 		out, err := json.Marshal(conf)
 		if err != nil {
-			log.Fatal("Error encoding config: " + err.Error())
+			logF("Error encoding config: " + err.Error())
 		}
 		err = os.WriteFile(getConfigPath(), out, 0o644)
 		if err != nil {
-			log.Fatal("Error while writting config: " + err.Error())
+			logF("Error while writting config: " + err.Error())
 		}
 	}
 	if task == "chBuild" {
 		if len(os.Args) != 4 {
-			log.Fatal("To chBuild use: gitop chBuild <repo> <path to a json that is a buildType>")
+			logF("To chBuild use: gitop chBuild <repo> <path to a json that is a buildType>")
 		}
 		out, err := os.ReadFile(os.Args[3])
 		if err != nil {
-			log.Fatal("Error opening new buildType: " + err.Error())
+			logF("Error opening new buildType: " + err.Error())
 		}
 		var build BuildType
 		err = json.Unmarshal(out, &build)
 		if err != nil {
-			log.Fatal("Error while decoding build type: " + err.Error())
+			logF("Error while decoding build type: " + err.Error())
 		}
 		repo, temp, Nfound := getRepoNParse(conf.Repos)
 		conf.Repos = temp
 		if Nfound {
-			log.Fatal("Repo not found")
+			logF("Repo not found")
 		}
 		conf.Repos = chBuild(repo, build, conf.Repos)
 		out, err = json.Marshal(conf)
 		if err != nil {
-			log.Fatal("Error encoding config: " + err.Error())
+			logF("Error encoding config: " + err.Error())
 		}
 		err = os.WriteFile(getConfigPath(), out, 0o644)
 		if err != nil {
-			log.Fatal("Error while writting config: " + err.Error())
+			logF("Error while writting config: " + err.Error())
 		}
 	}
 	if task == "buildInstall" {
 		repo, temp, Nfound := getRepoNParse(conf.Repos)
 		if Nfound {
-			log.Fatal("Could not find repo")
+			logF("Could not find repo")
 		}
 		conf.Repos = temp
 		doBuild(repo)
