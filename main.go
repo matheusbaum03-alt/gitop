@@ -149,9 +149,13 @@ func doInstall(repo Repo) {
 	if err != nil {
 		LogF("error with Unmarshal: " + err.Error())
 	}
-	for _, deltaEntry := range delta.DeltaEntries {
+	var entries []snapshots.Entry
+	for i, deltaEntry := range delta.DeltaEntries {
 		if repo.Name == deltaEntry.RepoName {
-			LogF("Error " + repo.Name + " already installed")
+			fmt.Println("Warning: " + repo.Name + " already installed reinstalling")
+			entries = deltaEntry.Entries
+			delta.DeltaEntries = append(delta.DeltaEntries[:i], delta.DeltaEntries[i+1:]...)
+			break
 		}
 	}
 	// 1: get first snapshot
@@ -173,12 +177,19 @@ func doInstall(repo Repo) {
 	// 3: new snapshot
 	newS := snapshots.GetMapDir(getLocal())
 	// 4: compare snapshot
-	entries := snapshots.GetDelta(oldS, newS)
+	entriesfN := snapshots.GetDelta(oldS, newS)
 	// 4.5: make delta
-
-	deltaEntry := DeltaEntries{
-		RepoName: repo.Name,
-		Entries:  entries,
+	var deltaEntry DeltaEntries
+	if entries != nil {
+		deltaEntry = DeltaEntries{
+			RepoName: repo.Name,
+			Entries:  entries,
+		}
+	} else {
+		deltaEntry = DeltaEntries{
+			RepoName: repo.Name,
+			Entries:  entriesfN,
+		}
 	}
 	delta.DeltaEntries = append(delta.DeltaEntries, deltaEntry)
 	// 5: write delta
