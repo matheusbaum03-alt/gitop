@@ -535,4 +535,8 @@ func main() {
 		doBuild(repo)
 		doInstall(repo)
 	}
+	err = os.Remove(getCachePath("lock.lock"))
+	if err != nil {
+		log.Fatal("Error removing check if is there")
+	}
 }
