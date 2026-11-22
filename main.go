@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -372,7 +373,21 @@ func LogF(msg string) {
 	os.Exit(1)
 }
 
+func lockExists() bool {
+	_, err := os.Stat(getCachePath("lock.lock"))
+	if err == nil {
+		return true
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return false
+	}
+	return true
+}
+
 func main() {
+	if lockExists() {
+		log.Fatal("Error lock exists wait for the other gitop process to end or weird path/permissions")
+	}
 	t, err := os.Create(getCachePath("lock.lock"))
 	if err != nil {
 		LogF("Could not create lock: " + err.Error())
