@@ -9,3 +9,6 @@ It is good to clone to base config.json I'm not sure of what happens if not
 
 DISCLAIMER: Anything installed in your system using this program is your fault not mine
 If you have any idea on something to add try reaching me
+
+> [!WARNING]
+> any delta with share at the end of the name will be ignored
