@@ -12,6 +12,15 @@ func prettyPrintInfo() {
 	fmt.Println("tasks: build, install, unistall, add and update")
 }
 
+func getLocal() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Println(err.Error())
+		home = os.Getenv("HOME")
+	}
+	return filepath.Join(home, ".local")
+}
+
 func getConfigPath() string {
 	home, err := os.UserHomeDir()
 	if err != nil {

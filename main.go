@@ -9,7 +9,18 @@ import (
 	"path"
 	"slices"
 	"strings"
+
+	"gitop/snapshots"
 )
+
+type DeltaEntries struct {
+	RepoName string            `json:"repoName"`
+	Entries  []snapshots.Entry `json:"entries"`
+}
+
+type Delta struct {
+	DeltaEntries []DeltaEntries `json:"deltaEntries"`
+}
 
 type Repo struct {
 	Name      string    `json:"name"`
@@ -65,7 +76,7 @@ func createConf(configPath string) (config, error) {
 func doBuild(repo Repo) {
 	err := os.Chdir(getCachePath(repo.Name))
 	if err != nil {
-		logF("Could not change to repo dir maybe it was added in a bad way? Try clonning manualy")
+		LogF("Could not change to repo dir maybe it was added in a bad way? Try clonning manualy")
 	}
 	fmt.Printf("Doing Build for %s using a %s\n", repo.Name, repo.BuildType.FileName)
 	cmd := exec.Command("bash", "-c", repo.BuildType.BuildCmds.Build)
@@ -73,7 +84,7 @@ func doBuild(repo Repo) {
 	cmd.Stderr = os.Stderr
 	err = cmd.Run()
 	if err != nil {
-		logF("Error on build: " + err.Error())
+		LogF("Error on build: " + err.Error())
 	}
 }
 
@@ -81,20 +92,20 @@ func doAdd(url string, buildTypes []BuildType) Repo {
 	fmt.Println("Adding and cloning: " + url)
 	err := os.Chdir(getCachePath(""))
 	if err != nil {
-		logF("could not go to ~/.local/share/gitop make it if needed")
+		LogF("could not go to ~/.local/share/gitop make it if needed")
 	}
 	cmd := exec.Command("git", "clone", "--depth", "1", url)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err = cmd.Run()
 	if err != nil {
-		logF("error while cloning: " + err.Error())
+		LogF("error while cloning: " + err.Error())
 	}
 	cleanURL := strings.TrimSuffix(url, ".git")
 	cleanURL = path.Base(cleanURL)
 	entried, err := os.ReadDir(getCachePath(cleanURL))
 	if err != nil {
-		logF("Error reading repo: " + err.Error())
+		LogF("Error reading repo: " + err.Error())
 	}
 	var buildType BuildType
 	for _, entry := range entried {
@@ -129,16 +140,63 @@ func getRepoNParse(repos []Repo) (Repo, []Repo, bool) {
 }
 
 func doInstall(repo Repo) {
-	err := os.Chdir(getCachePath(repo.Name))
+	var delta Delta
+	out, err := os.ReadFile(getCachePath("delta.json"))
 	if err != nil {
-		logF("Could not go to the repo path: " + err.Error())
+		LogF("Error reading delta.json make it with touch ~/.local/share/gitop/delta.json")
+	}
+	err = json.Unmarshal(out, &delta)
+	if err != nil {
+		LogF("error with Unmarshal: " + err.Error())
+	}
+	for _, deltaEntry := range delta.DeltaEntries {
+		if repo.Name == deltaEntry.RepoName {
+			LogF("Error " + repo.Name + " already installed")
+		}
+	}
+	// 1: get first snapshot
+
+	oldS := snapshots.GetMapDir(getLocal())
+
+	// 2: install command
+	err = os.Chdir(getCachePath(repo.Name))
+	if err != nil {
+		LogF("Could not go to the repo path: " + err.Error())
 	}
 	cmd := exec.Command("bash", "-c", repo.BuildType.BuildCmds.Install)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err = cmd.Run()
 	if err != nil {
-		logF("Error while instaling: " + err.Error())
+		LogF("Error while instaling: " + err.Error())
+	}
+	// 3: new snapshot
+	newS := snapshots.GetMapDir(getLocal())
+	// 4: compare snapshot
+	entries := snapshots.GetDelta(oldS, newS)
+	// 4.5: make delta
+
+	deltaEntry := DeltaEntries{
+		RepoName: repo.Name,
+		Entries:  entries,
+	}
+	delta.DeltaEntries = append(delta.DeltaEntries, deltaEntry)
+	// 5: write delta
+	file, err := os.Create(getCachePath("delta.json"))
+	if err != nil {
+		LogF("Error opening delta.json: " + err.Error())
+	}
+	out, err = json.Marshal(delta)
+	if err != nil {
+		LogF("Error Marshal delta: " + err.Error())
+	}
+	_, err = file.Write(out)
+	if err != nil {
+		LogF("Error writting: " + err.Error())
+	}
+	err = file.Close()
+	if err != nil {
+		fmt.Println("Error closing neglegible: " + err.Error())
 	}
 }
 
@@ -147,34 +205,73 @@ func getVersion(pathU string) string {
 	cmd.Stderr = os.Stderr
 	version, err := cmd.Output()
 	if err != nil {
-		logF("Getting version returned: " + err.Error())
+		LogF("Getting version returned: " + err.Error())
 	}
 	return string(version)
 }
 
-func doUninstall(repo Repo, repos []Repo) []Repo {
-	err := os.Chdir(getCachePath(repo.Name))
+func doUninstall(repo Repo, repos []Repo, legacy bool) []Repo {
+	var delta Delta
+	out, err := os.ReadFile(getCachePath("delta.json"))
 	if err != nil {
-		logF("error going to repo")
+		LogF("Error reading delta.json make it with touch ~/.local/share/gitop/delta.json")
 	}
-	cmd := exec.Command("bash", "-c", repo.BuildType.BuildCmds.Uninstall)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	err = cmd.Run()
+	err = json.Unmarshal(out, &delta)
 	if err != nil {
-		logF("error while uninstaling: " + err.Error())
+		LogF("error with Unmarshal: " + err.Error())
+	}
+	deltaToRemove := -1
+	var targetEntries []snapshots.Entry
+	for i, deltaEntry := range delta.DeltaEntries {
+		if repo.Name == deltaEntry.RepoName {
+			targetEntries = deltaEntry.Entries
+			deltaToRemove = i
+			break
+		}
 	}
 
-	err = os.Chdir("..")
+	err = os.Chdir(getCachePath(repo.Name))
 	if err != nil {
-		logF("Error leaving repo")
+		LogF("error going to repo")
 	}
-	cmd = exec.Command("rm", "-rf", getCachePath(repo.Name))
+	if legacy {
+		cmd := exec.Command("bash", "-c", repo.BuildType.BuildCmds.Uninstall)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		err = cmd.Run()
+		if err != nil {
+			LogF("error while uninstaling: " + err.Error())
+		}
+
+		err = os.Chdir("..")
+		if err != nil {
+			LogF("Error leaving repo")
+		}
+	} else {
+		err = os.Chdir(getLocal())
+		if err != nil {
+			LogF("going to local")
+		}
+		for _, entry := range targetEntries {
+			if entry.Type == "dir" {
+				fmt.Println("Ignoring directory")
+				continue
+			} else if entry.Type == "file" {
+				fmt.Println("Removing: " + entry.Path)
+				if err = os.Remove(entry.Path); err != nil {
+					LogF("Error removing: " + err.Error())
+				}
+			} else {
+				fmt.Println("Unknown entry type however coded this was tripping")
+			}
+		}
+	}
+	cmd := exec.Command("rm", "-rf", getCachePath(repo.Name))
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err = cmd.Run()
 	if err != nil {
-		logF("Error Deleting repo please do it yourself")
+		LogF("Error Deleting repo please do it yourself")
 	}
 	toExclude := -1
 	for i, re := range repos {
@@ -184,16 +281,32 @@ func doUninstall(repo Repo, repos []Repo) []Repo {
 		}
 	}
 	if toExclude == -1 {
-		logF("Could not find repo in repos that were given how did this happen I have no idea")
+		LogF("Could not find repo in repos that were given how did this happen I have no idea")
 	}
 	repos = append(repos[:toExclude], repos[toExclude+1:]...)
+
+	// Write delta without target
+
+	if deltaToRemove == 1 {
+		fmt.Println("Your repo was not installed in the first place just cleaning then")
+		return repos
+	}
+	delta.DeltaEntries = append(delta.DeltaEntries[:deltaToRemove], delta.DeltaEntries[deltaToRemove+1:]...)
+	out, err = json.Marshal(delta)
+	if err != nil {
+		LogF("Error Marshal: " + err.Error())
+	}
+	err = os.WriteFile(getCachePath("delta.json"), out, 0o644)
+	if err != nil {
+		LogF("Error Writting delta.json: " + err.Error())
+	}
 	return repos
 }
 
 func doUpdate(repo Repo) Repo {
 	err := os.Chdir(getCachePath(repo.Name))
 	if err != nil {
-		logF("Check if repo exists maybe a uncloned repo look: " + err.Error())
+		LogF("Check if repo exists maybe a uncloned repo look: " + err.Error())
 	}
 	fmt.Println("Updating: " + repo.Name)
 	oldVersion := getVersion(repo.Name)
@@ -203,7 +316,7 @@ func doUpdate(repo Repo) Repo {
 	cmd.Stdout = os.Stdout
 	err = cmd.Run()
 	if err != nil {
-		logF("Error while updating repo: " + err.Error())
+		LogF("Error while updating repo: " + err.Error())
 	}
 	newVersion := getVersion(repo.Name)
 	fmt.Println("new: " + newVersion)
@@ -239,7 +352,7 @@ func chBuild(repo Repo, newBuild BuildType, repos []Repo) []Repo {
 	return repos
 }
 
-func logF(msg string) {
+func LogF(msg string) {
 	fmt.Println(msg)
 	err := os.Remove(getCachePath("lock.lock"))
 	if err != nil {
@@ -251,7 +364,7 @@ func logF(msg string) {
 func main() {
 	t, err := os.Create(getCachePath("lock.lock"))
 	if err != nil {
-		logF("Could not create lock: " + err.Error())
+		LogF("Could not create lock: " + err.Error())
 	}
 	err = t.Close()
 	if err != nil {
@@ -270,13 +383,13 @@ func main() {
 	task := validateArgs()
 	conf, err := createConf(getConfigPath())
 	if err != nil {
-		logF("Error while making ctx: " + err.Error())
+		LogF("Error while making ctx: " + err.Error())
 	}
 	if task == "build" {
 		repo, temp, Nfound := getRepoNParse(conf.Repos)
 		conf.Repos = temp
 		if Nfound {
-			logF("Could not find repo")
+			LogF("Could not find repo")
 		}
 		doBuild(repo)
 	}
@@ -284,24 +397,24 @@ func main() {
 		repo := doAdd(os.Args[2], conf.BuildTypes)
 		for _, re := range conf.Repos {
 			if re == repo {
-				logF("Repo was already added")
+				LogF("Repo was already added")
 			}
 		}
 		conf.Repos = append(conf.Repos, repo)
 		out, err := json.Marshal(conf)
 		if err != nil {
-			logF("Could Not encode config: " + err.Error())
+			LogF("Could Not encode config: " + err.Error())
 		}
 		err = os.WriteFile(getConfigPath(), out, 0o644)
 		if err != nil {
-			logF("Could Not write encoded config: " + err.Error())
+			LogF("Could Not write encoded config: " + err.Error())
 		}
 	}
 	if task == "install" {
 		repo, temp, Nfound := getRepoNParse(conf.Repos)
 		conf.Repos = temp
 		if Nfound {
-			logF("Could not find repo")
+			LogF("Could not find repo")
 		}
 		doInstall(repo)
 	}
@@ -309,23 +422,28 @@ func main() {
 		repo, temp, Nfound := getRepoNParse(conf.Repos)
 		conf.Repos = temp
 		if Nfound {
-			logF("Could not find repo")
+			LogF("Could not find repo")
 		}
-		conf.Repos = doUninstall(repo, conf.Repos)
+		legacy := false
+		if len(os.Args) > 3 && os.Args[3] == "-l" {
+			legacy = true
+		}
+		conf.Repos = doUninstall(repo, conf.Repos, legacy)
+
 		out, err := json.Marshal(conf)
 		if err != nil {
-			logF("Error encoding config: " + err.Error())
+			LogF("Error encoding config: " + err.Error())
 		}
 		err = os.WriteFile(getConfigPath(), out, 0o644)
 		if err != nil {
-			logF("Could not write config to file: " + err.Error())
+			LogF("Could not write config to file: " + err.Error())
 		}
 	}
 	if task == "update" {
 		repo, temp, Nfound := getRepoNParse(conf.Repos)
 		conf.Repos = temp
 		if Nfound {
-			logF("Repo not Found")
+			LogF("Repo not Found")
 		}
 		repoN := doUpdate(repo)
 		for i, re := range conf.Repos {
@@ -336,56 +454,56 @@ func main() {
 		}
 		out, err := json.Marshal(conf)
 		if err != nil {
-			logF("Error encoding config: " + err.Error())
+			LogF("Error encoding config: " + err.Error())
 		}
 		err = os.WriteFile(getConfigPath(), out, 0o644)
 		if err != nil {
-			logF("Error while writting config: " + err.Error())
+			LogF("Error while writting config: " + err.Error())
 		}
 	}
 	if task == "updateAll" {
 		conf = doUpdateAll(conf)
 		out, err := json.Marshal(conf)
 		if err != nil {
-			logF("Error encoding config: " + err.Error())
+			LogF("Error encoding config: " + err.Error())
 		}
 		err = os.WriteFile(getConfigPath(), out, 0o644)
 		if err != nil {
-			logF("Error while writting config: " + err.Error())
+			LogF("Error while writting config: " + err.Error())
 		}
 	}
 	if task == "chBuild" {
 		if len(os.Args) != 4 {
-			logF("To chBuild use: gitop chBuild <repo> <path to a json that is a buildType>")
+			LogF("To chBuild use: gitop chBuild <repo> <path to a json that is a buildType>")
 		}
 		out, err := os.ReadFile(os.Args[3])
 		if err != nil {
-			logF("Error opening new buildType: " + err.Error())
+			LogF("Error opening new buildType: " + err.Error())
 		}
 		var build BuildType
 		err = json.Unmarshal(out, &build)
 		if err != nil {
-			logF("Error while decoding build type: " + err.Error())
+			LogF("Error while decoding build type: " + err.Error())
 		}
 		repo, temp, Nfound := getRepoNParse(conf.Repos)
 		conf.Repos = temp
 		if Nfound {
-			logF("Repo not found")
+			LogF("Repo not found")
 		}
 		conf.Repos = chBuild(repo, build, conf.Repos)
 		out, err = json.Marshal(conf)
 		if err != nil {
-			logF("Error encoding config: " + err.Error())
+			LogF("Error encoding config: " + err.Error())
 		}
 		err = os.WriteFile(getConfigPath(), out, 0o644)
 		if err != nil {
-			logF("Error while writting config: " + err.Error())
+			LogF("Error while writting config: " + err.Error())
 		}
 	}
 	if task == "buildInstall" {
 		repo, temp, Nfound := getRepoNParse(conf.Repos)
 		if Nfound {
-			logF("Could not find repo")
+			LogF("Could not find repo")
 		}
 		conf.Repos = temp
 		doBuild(repo)
