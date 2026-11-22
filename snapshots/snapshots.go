@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type Entry struct {
@@ -50,6 +51,9 @@ func GetMapDir(dir string) map[string]string {
 		relPath, err := filepath.Rel(dir, path)
 		if err != nil {
 			return err
+		}
+		if strings.Contains(relPath, "share/") {
+			return nil
 		}
 		if d.IsDir() {
 			paths[relPath] = "dir"

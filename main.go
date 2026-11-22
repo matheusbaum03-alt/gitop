@@ -299,7 +299,7 @@ func doUninstall(repo Repo, repos []Repo, legacy bool) []Repo {
 
 	// Write delta without target
 
-	if deltaToRemove == 1 {
+	if deltaToRemove == -1 {
 		fmt.Println("Your repo was not installed in the first place just cleaning then")
 		return repos
 	}
