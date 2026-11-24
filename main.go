@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -90,14 +89,14 @@ func doBuild(repo Repo) {
 	}
 }
 
-func doAdd(url string, buildTypes []BuildType, deep bool) Repo {
+func doAdd(url string, buildTypes []BuildType, Ndeep bool) Repo {
 	fmt.Println("Adding and cloning: " + url)
 	err := os.Chdir(getCachePath(""))
 	if err != nil {
 		LogF("could not go to ~/.local/share/gitop make it if needed")
 	}
 	var cmd *exec.Cmd
-	if deep {
+	if !Ndeep {
 		cmd = exec.Command("git", "clone", "--depth", "1", url)
 	} else {
 		cmd = exec.Command("git", "clone", url)
@@ -426,9 +425,11 @@ func main() {
 		doBuild(repo)
 	}
 	if task == "add" {
-		deep := flag.Bool("d", false, "whether to do a deep copy or not")
-		flag.Parse()
-		repo := doAdd(os.Args[2], conf.BuildTypes, *deep)
+		Ndeep := false
+		if len(os.Args) > 3 && os.Args[3] == "-nd" {
+			Ndeep = true
+		}
+		repo := doAdd(os.Args[2], conf.BuildTypes, Ndeep)
 		for _, re := range conf.Repos {
 			if re == repo {
 				LogF("Repo was already added")
@@ -458,9 +459,11 @@ func main() {
 		if Nfound {
 			LogF("Could not find repo")
 		}
-		legacy := flag.Bool("l", false, "uses legacy uninstall")
-		flag.Parse()
-		conf.Repos = doUninstall(repo, conf.Repos, *legacy)
+		legacy := false
+		if len(os.Args) > 3 && os.Args[3] == "-l" {
+			legacy = true
+		}
+		conf.Repos = doUninstall(repo, conf.Repos, legacy)
 
 		out, err := json.Marshal(conf)
 		if err != nil {
